@@ -1,0 +1,777 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AIコメンテーター</title>
+  <link rel="icon" href="./AIcommentator.png" type="image/png">
+  <link rel="apple-touch-icon" href="./AIcommentator.png">
+
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 12px; background:#fafafa; }
+    .wrap { max-width: 1060px; margin: 0 auto; }
+    h3 { margin: 10px 0 6px; }
+
+    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin: 10px 0; }
+    button, select, input[type="range"], input[type="text"], textarea {
+      padding:10px 12px; border-radius:10px; border:1px solid #ccc; background:#fff;
+    }
+    button { cursor:pointer; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .pill {
+      padding:6px 10px; border:1px solid #ddd; border-radius:999px;
+      font-size:12px; color:#444; background:#fff;
+      display:inline-flex; align-items:center; gap:6px;
+    }
+
+    .stage { position: relative; width: 100%; border-radius: 14px; overflow: hidden; background:#111; margin-top: 6px; }
+    video { width: 100%; display:block; }
+    canvas.overlay { position:absolute; inset:0; width:100%; height:100%; pointer-events:auto; touch-action:none; }
+
+    .chat { margin-top: 12px; border: 1px solid #e6e6e6; background:#fff; border-radius: 14px; padding: 12px; height: 330px; overflow: auto; }
+    .msg { display:flex; margin: 10px 0; }
+    .bubble { max-width: 78%; padding: 10px 12px; border-radius: 14px; border: 1px solid #eee; line-height: 1.45; font-size: 16px; white-space: pre-wrap; }
+    .ai { justify-content:flex-start; }
+    .ai .bubble { background:#f6f7ff; }
+    .meta { font-size:12px; color:#777; margin-top:6px; }
+
+    #status { font-size: 12px; color:#666; margin-top:8px; }
+    .hint { font-size: 12px; color:#666; margin-top:6px; }
+
+    .tight { min-width: 160px; }
+    .wide  { min-width: 280px; }
+
+    .promptbox {
+      margin-top: 10px;
+      background:#fff;
+      border:1px solid #e6e6e6;
+      border-radius: 14px;
+      padding: 12px;
+    }
+    .promptbox textarea{
+      width: 100%;
+      min-height: 64px;
+      resize: vertical;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    .small { font-size: 12px; color:#666; }
+    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background:#f3f4f6; border:1px solid #e5e7eb; padding: 2px 6px; border-radius: 6px; }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 10px 0 6px;
+    }
+    .header img {
+      width: 34px;
+      height: 34px;
+      object-fit: contain;
+      border-radius: 8px; /* 角丸が不要なら消してOK */
+    }
+    .header h3 {
+      margin: 0;
+    }
+    .flex-break { flex-basis: 100%; height: 0; }
+  </style>
+</head>
+
+<body>
+  <div class="header">
+    <img src="./AIcommentator.png" alt="AIコメンテーター アイコン">
+    <h3>AIコメンテーター</h3>
+  </div>
+  <div class="row">
+    <button id="start">開始</button>
+    <button id="stop" disabled>停止</button>
+
+    <span class="pill">キャプチャ元</span>
+    <select id="source" class="tight">
+      <option value="screen">画面共有（タブ/ウィンドウ/画面）</option>
+      <option value="camera">カメラ（PC/スマホ）</option>
+    </select>
+
+    <span class="pill">カメラ</span>
+    <select id="cameraSelect" class="wide">
+      <option value="">（自動）</option>
+    </select>
+
+    <label class="pill">
+      <input id="speak" type="checkbox" checked />
+      音声
+    </label>
+    <span class="flex-break"></span>
+    <span class="pill">送信間隔: <span id="ivalLabel">2.0</span>s</span>
+    <input id="ival" type="range" min="1.0" max="20.0" step="0.1" value="2.0" />
+
+    <span class="pill">最大文字数: <span id="maxCharsLabel">40</span></span>
+    <input id="maxChars" type="range" min="10" max="100" step="1" value="40" />
+
+    <span class="pill">画質: <span id="qLabel">0.55</span></span>
+    <input id="q" type="range" min="0.35" max="0.85" step="0.05" value="0.55" />
+
+    <button id="cropMode">クロップ選択: OFF</button>
+    <button id="cropReset">クロップ解除</button>
+
+    <button id="clear">履歴クリア</button>
+  </div>
+
+  <div class="row">
+    <span class="pill">音声方式</span>
+    <select id="ttsMode" class="tight">
+      <option value="webspeech">Web Speech（ブラウザ内蔵）</option>
+      <option value="voicevox">VOICEVOX（高品質 / ローカル起動時）</option>
+    </select>
+
+    <span class="pill">Web Speech 音声</span>
+    <select id="voiceSelect" class="wide"></select>
+
+    <span class="pill">話速: <span id="rateLabel">1.02</span></span>
+    <input id="rate" type="range" min="0.85" max="1.25" step="0.01" value="1.02" />
+
+    <span class="pill">高さ: <span id="pitchLabel">1.00</span></span>
+    <input id="pitch" type="range" min="0.80" max="1.20" step="0.01" value="1.00" />
+
+    <span class="pill">VOICEVOX speaker</span>
+    <select id="vvSpeaker" class="wide">
+      <option value="0">（未読込）</option>
+    </select>
+
+    <button id="loadSpeakers">VOICEVOX 話者読込</button>
+  </div>
+
+  <div class="stage">
+    <video id="v" playsinline muted></video>
+    <canvas id="overlay" class="overlay"></canvas>
+  </div>
+
+  <div class="promptbox">
+    <div class="row" style="margin:0 0 8px 0;">
+      <span class="pill">Geminiへの追加指示（任意）</span>
+      <label class="pill">
+        <input id="useExtra" type="checkbox" checked />
+        追加指示を有効にする
+      </label>
+      <label class="pill">
+        <input id="oneShot" type="checkbox" />
+        1回だけ反映（送信後に自動OFF）
+      </label>
+      <button id="sendNow">今すぐ1回送信</button>
+      <span class="small">ショートカット: <span class="kbd">Ctrl</span> + <span class="kbd">Enter</span></span>
+    </div>
+    <textarea id="extraPrompt" placeholder="例：画面下のテロップ（字幕）を優先して読み取り、内容を短く要約して。/ 画面下のコメント欄に注目して読み上げて。"></textarea>
+    <div class="small" style="margin-top:6px;">
+      ※この入力は <b>meta.extraPrompt</b> としてサーバへ送られ、Geminiの指示に含まれます。  
+      「何を見るか（画面下、右側、テロップ、数字）」などの指定が効きやすいです。
+    </div>
+  </div>
+
+  <canvas id="cap" style="display:none;"></canvas>
+
+  <div class="chat" id="chat"></div>
+  <div id="status">未開始</div>
+
+  <div class="hint">
+    画面共有は「動画が再生されているタブ」を選ぶと安定。<br>
+    スマホでカメラ使用は HTTPS が必要な場合があります。
+  </div>
+</div>
+
+<script>
+/* ========= DOM ========= */
+const v = document.getElementById("v");
+const overlay = document.getElementById("overlay");
+const octx = overlay.getContext("2d");
+const cap = document.getElementById("cap");
+const cctx = cap.getContext("2d", { willReadFrequently: true });
+
+const btnStart = document.getElementById("start");
+const btnStop  = document.getElementById("stop");
+const btnClear = document.getElementById("clear");
+
+const sourceSel = document.getElementById("source");
+const cameraSelect = document.getElementById("cameraSelect");
+
+const chkSpeak = document.getElementById("speak");
+
+const ival = document.getElementById("ival");
+const ivalLabel = document.getElementById("ivalLabel");
+const maxChars = document.getElementById("maxChars");
+const maxCharsLabel = document.getElementById("maxCharsLabel");
+const q = document.getElementById("q");
+const qLabel = document.getElementById("qLabel");
+
+const btnCropMode = document.getElementById("cropMode");
+const btnCropReset = document.getElementById("cropReset");
+
+const chatEl = document.getElementById("chat");
+const statusEl = document.getElementById("status");
+
+/* ========= Extra prompt UI ========= */
+const extraPrompt = document.getElementById("extraPrompt");
+const useExtra = document.getElementById("useExtra");
+const oneShot = document.getElementById("oneShot");
+const btnSendNow = document.getElementById("sendNow");
+
+/* ========= 音声UI ========= */
+const ttsMode = document.getElementById("ttsMode");
+const voiceSelect = document.getElementById("voiceSelect");
+const rate = document.getElementById("rate");
+const rateLabel = document.getElementById("rateLabel");
+const pitch = document.getElementById("pitch");
+const pitchLabel = document.getElementById("pitchLabel");
+const vvSpeaker = document.getElementById("vvSpeaker");
+const btnLoadSpeakers = document.getElementById("loadSpeakers");
+
+/* ========= state ========= */
+const LS_CHAT = "video_commentary_chat_v5";
+const LS_CROP = "video_commentary_crop_v1";
+const LS_EXTRA = "video_commentary_extra_prompt_v1";
+const LS_USEEXTRA = "video_commentary_use_extra_v1";
+const LS_ONESHOT = "video_commentary_one_shot_v1";
+
+let stream = null;
+let running = false;
+let timer = null;
+
+let sessionId = "";
+let prevDataUrl = "";
+
+let messages = [];
+
+/* ========= UI labels ========= */
+function syncLabels() {
+  ivalLabel.textContent = Number(ival.value).toFixed(1);
+  maxCharsLabel.textContent = String(Number(maxChars.value)|0);
+  qLabel.textContent = Number(q.value).toFixed(2);
+  rateLabel.textContent = Number(rate.value).toFixed(2);
+  pitchLabel.textContent = Number(pitch.value).toFixed(2);
+}
+ival.oninput = () => { syncLabels(); if (running) restartTimer(); };
+maxChars.oninput = syncLabels;
+q.oninput = syncLabels;
+rate.oninput = syncLabels;
+pitch.oninput = syncLabels;
+syncLabels();
+
+/* ========= chat history ========= */
+function loadHistory() {
+  try { messages = JSON.parse(localStorage.getItem(LS_CHAT) || "[]"); }
+  catch { messages = []; }
+  renderChat();
+}
+function saveHistory() {
+  try { localStorage.setItem(LS_CHAT, JSON.stringify(messages.slice(-500))); }
+  catch {}
+}
+function fmtTime(ts){
+  const d = new Date(ts);
+  return d.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+}
+function renderChat(){
+  chatEl.innerHTML = "";
+  for (const m of messages) {
+    const row = document.createElement("div");
+    row.className = "msg ai";
+    const b = document.createElement("div");
+    b.className = "bubble";
+    b.textContent = m.text;
+
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.textContent = `${fmtTime(m.ts)} / ${m.topic||"—"} / conf ${Number(m.confidence??0).toFixed(2)}`;
+    b.appendChild(meta);
+
+    row.appendChild(b);
+    chatEl.appendChild(row);
+  }
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+function addMessage({ text, topic, confidence }){
+  messages.push({ ts: Date.now(), text, topic, confidence });
+  if (messages.length > 500) messages.splice(0, messages.length - 500);
+  saveHistory();
+  renderChat();
+}
+
+/* ========= text helpers ========= */
+function normalize(x){
+  return String(x||"")
+    .replace(/[！!。．\s]/g,"")
+    .replace(/です|ます|ですね|でしょう|ようです/g,"");
+}
+function enforceMaxChars(text){
+  const limit = Math.max(10, Math.min(100, Number(maxChars.value)|0));
+  let t = String(text||"").replace(/\s+/g," ").trim();
+
+  const first = t.split(/。|！|!|\n/).filter(Boolean)[0];
+  if (first && first.length >= 3) t = first + "。";
+
+  if (t.length > limit) t = t.slice(0, limit);
+  return t;
+}
+
+/* ========= Extra prompt persistence ========= */
+function loadExtraState(){
+  try { extraPrompt.value = localStorage.getItem(LS_EXTRA) || ""; } catch {}
+  try { useExtra.checked = (localStorage.getItem(LS_USEEXTRA) ?? "1") === "1"; } catch {}
+  try { oneShot.checked = (localStorage.getItem(LS_ONESHOT) ?? "0") === "1"; } catch {}
+}
+function saveExtraState(){
+  try { localStorage.setItem(LS_EXTRA, extraPrompt.value || ""); } catch {}
+  try { localStorage.setItem(LS_USEEXTRA, useExtra.checked ? "1" : "0"); } catch {}
+  try { localStorage.setItem(LS_ONESHOT, oneShot.checked ? "1" : "0"); } catch {}
+}
+extraPrompt.addEventListener("input", saveExtraState);
+useExtra.addEventListener("change", saveExtraState);
+oneShot.addEventListener("change", saveExtraState);
+
+/* ========= Natural TTS ========= */
+let voicesCache = [];
+function refreshVoiceList(){
+  voicesCache = speechSynthesis.getVoices() || [];
+  const ja = voicesCache.filter(v => (v.lang || "").toLowerCase().startsWith("ja"));
+  const list = ja.length ? ja : voicesCache;
+
+  voiceSelect.innerHTML = "";
+  for (const vv of list) {
+    const opt = document.createElement("option");
+    opt.value = vv.name;
+    opt.textContent = `${vv.name} (${vv.lang})`;
+    voiceSelect.appendChild(opt);
+  }
+
+  const prefer = ["Google 日本語", "Microsoft", "Kyoko", "Otoya", "Haruka"];
+  for (const p of prefer) {
+    const found = list.find(vv => vv.name.includes(p));
+    if (found) { voiceSelect.value = found.name; break; }
+  }
+}
+speechSynthesis.onvoiceschanged = refreshVoiceList;
+refreshVoiceList();
+
+btnLoadSpeakers.addEventListener("click", async () => {
+  try{
+    const r = await fetch("/api/tts/voicevox/speakers");
+    if (!r.ok) throw new Error(await r.text());
+    const speakers = await r.json();
+    vvSpeaker.innerHTML = "";
+    for (const sp of speakers) {
+      for (const st of (sp.styles || [])) {
+        const opt = document.createElement("option");
+        opt.value = st.id;
+        opt.textContent = `${sp.name} / ${st.name} (id=${st.id})`;
+        vvSpeaker.appendChild(opt);
+      }
+    }
+  }catch(e){
+    alert("VOICEVOX話者読込に失敗しました。VOICEVOXエンジン起動中か確認してください。");
+  }
+});
+
+let lastSpokenAt = 0;
+let lastTextNorm = "";
+async function speakText(text){
+  if (!chkSpeak.checked) return;
+
+  const now = Date.now();
+  const t = enforceMaxChars(text);
+  const n = normalize(t);
+
+  if (n && lastTextNorm && (n === lastTextNorm || n.includes(lastTextNorm) || lastTextNorm.includes(n))) return;
+  if (now - lastSpokenAt < 1200) return;
+
+  lastTextNorm = n;
+  lastSpokenAt = now;
+
+  if (ttsMode.value === "voicevox") {
+    try {
+      const sp = Number(vvSpeaker.value ?? 0) | 0;
+      const r = await fetch("/api/tts/voicevox", {
+        method: "POST",
+        headers: { "content-type":"application/json" },
+        body: JSON.stringify({ text: t, speaker: sp })
+      });
+      if (!r.ok) throw new Error(await r.text());
+
+      const buf = await r.arrayBuffer();
+      const blob = new Blob([buf], { type:"audio/wav" });
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.play();
+      audio.onended = () => URL.revokeObjectURL(url);
+      return;
+    } catch (e) {
+      console.warn("VOICEVOX failed, fallback to WebSpeech:", e);
+    }
+  }
+
+  const u = new SpeechSynthesisUtterance(t);
+  u.lang = "ja-JP";
+  u.rate = Number(rate.value ?? 1.02);
+  u.pitch = Number(pitch.value ?? 1.00);
+  u.volume = 1.0;
+
+  const name = voiceSelect.value;
+  const vv = voicesCache.find(v => v.name === name);
+  if (vv) u.voice = vv;
+
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+
+/* ========= Crop drag selection ========= */
+let cropMode = false;
+let cropRect = null;
+let drag = { active:false, sx:0, sy:0, cx:0, cy:0 };
+
+function saveCrop(){ try { localStorage.setItem(LS_CROP, JSON.stringify(cropRect)); } catch {} }
+function loadCrop(){ try { cropRect = JSON.parse(localStorage.getItem(LS_CROP) || "null"); } catch { cropRect=null; } }
+
+function setCropMode(on){
+  cropMode = !!on;
+  btnCropMode.textContent = "クロップ選択: " + (cropMode ? "ON" : "OFF");
+  overlay.style.cursor = cropMode ? "crosshair" : "default";
+}
+btnCropMode.onclick = () => setCropMode(!cropMode);
+btnCropReset.onclick = () => { cropRect=null; saveCrop(); drawOverlay(); };
+
+function resizeOverlay(){
+  const r = overlay.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  overlay.width = Math.max(1, Math.round(r.width * dpr));
+  overlay.height = Math.max(1, Math.round(r.height * dpr));
+  drawOverlay();
+}
+window.addEventListener("resize", resizeOverlay);
+
+function clientToVideoXY(clientX, clientY){
+  const rect = overlay.getBoundingClientRect();
+  const px = (clientX - rect.left) / rect.width;
+  const py = (clientY - rect.top) / rect.height;
+  const x = Math.max(0, Math.min(v.videoWidth, px * v.videoWidth));
+  const y = Math.max(0, Math.min(v.videoHeight, py * v.videoHeight));
+  return { x, y };
+}
+
+function updateCropFromDrag(){
+  const x1 = Math.min(drag.sx, drag.cx);
+  const y1 = Math.min(drag.sy, drag.cy);
+  const x2 = Math.max(drag.sx, drag.cx);
+  const y2 = Math.max(drag.sy, drag.cy);
+  const w = Math.max(1, x2 - x1);
+  const h = Math.max(1, y2 - y1);
+
+  const minW = v.videoWidth * 0.10;
+  const minH = v.videoHeight * 0.10;
+  if (w < minW || h < minH) return;
+
+  cropRect = { x: Math.round(x1), y: Math.round(y1), w: Math.round(w), h: Math.round(h) };
+  saveCrop();
+}
+
+function drawOverlay(){
+  const r = overlay.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const W = overlay.width, H = overlay.height;
+  octx.clearRect(0,0,W,H);
+
+  if (!cropRect || !v.videoWidth || !v.videoHeight) {
+    octx.save();
+    octx.globalAlpha = 0.18;
+    octx.strokeStyle = "#fff";
+    octx.lineWidth = 2 * dpr;
+    octx.strokeRect(6*dpr, 6*dpr, W-12*dpr, H-12*dpr);
+    octx.restore();
+    return;
+  }
+
+  const scaleX = (r.width * dpr) / v.videoWidth;
+  const scaleY = (r.height * dpr) / v.videoHeight;
+  const x = cropRect.x * scaleX;
+  const y = cropRect.y * scaleY;
+  const w = cropRect.w * scaleX;
+  const h = cropRect.h * scaleY;
+
+  octx.save();
+  octx.fillStyle = "rgba(0,0,0,0.35)";
+  octx.fillRect(0,0,W,H);
+  octx.clearRect(x,y,w,h);
+  octx.restore();
+
+  octx.save();
+  octx.strokeStyle = "#00E5FF";
+  octx.lineWidth = 3 * dpr;
+  octx.strokeRect(x,y,w,h);
+  octx.fillStyle = "rgba(0,229,255,0.12)";
+  octx.fillRect(x,y,w,h);
+  octx.restore();
+}
+
+function onPointerDown(e){
+  if (!cropMode) return;
+  if (!v.videoWidth || !v.videoHeight) return;
+  overlay.setPointerCapture?.(e.pointerId);
+
+  const p = clientToVideoXY(e.clientX, e.clientY);
+  drag.active = true;
+  drag.sx = p.x; drag.sy = p.y;
+  drag.cx = p.x; drag.cy = p.y;
+  cropRect = { x: Math.round(p.x), y: Math.round(p.y), w: 1, h: 1 };
+  drawOverlay();
+}
+function onPointerMove(e){
+  if (!drag.active) return;
+  const p = clientToVideoXY(e.clientX, e.clientY);
+  drag.cx = p.x; drag.cy = p.y;
+
+  const x1 = Math.min(drag.sx, drag.cx);
+  const y1 = Math.min(drag.sy, drag.cy);
+  const x2 = Math.max(drag.sx, drag.cx);
+  const y2 = Math.max(drag.sy, drag.cy);
+  cropRect = { x: Math.round(x1), y: Math.round(y1), w: Math.round(x2-x1), h: Math.round(y2-y1) };
+  drawOverlay();
+}
+function onPointerUp(){
+  if (!drag.active) return;
+  drag.active = false;
+  updateCropFromDrag();
+  drawOverlay();
+}
+overlay.addEventListener("pointerdown", onPointerDown);
+overlay.addEventListener("pointermove", onPointerMove);
+overlay.addEventListener("pointerup", onPointerUp);
+overlay.addEventListener("pointercancel", onPointerUp);
+
+/* ========= capture source ========= */
+async function listCameras(){
+  cameraSelect.innerHTML = `<option value="">（自動）</option>`;
+  try{
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    const cams = devs.filter(d => d.kind === "videoinput");
+    for (const d of cams) {
+      const opt = document.createElement("option");
+      opt.value = d.deviceId;
+      opt.textContent = d.label || "Camera";
+      cameraSelect.appendChild(opt);
+    }
+  }catch{}
+}
+
+async function startCapture(){
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null;
+
+  if (sourceSel.value === "camera") {
+    const deviceId = cameraSelect.value;
+    const constraints = {
+      video: deviceId
+        ? { deviceId: { exact: deviceId } }
+        : { facingMode: "environment" },
+      audio: false
+    };
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+  } else {
+    stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: 30 },
+      audio: false
+    });
+  }
+
+  v.srcObject = stream;
+  await v.play();
+
+  resizeOverlay();
+  drawOverlay();
+
+  const track = stream.getVideoTracks?.()[0];
+  if (track) track.addEventListener("ended", () => stopAll(), { once:true });
+
+  await listCameras();
+}
+
+function stopAll(){
+  running = false;
+  if (timer) clearInterval(timer);
+  timer = null;
+
+  speechSynthesis.cancel();
+
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null;
+  v.srcObject = null;
+
+  btnStart.disabled = false;
+  btnStop.disabled = true;
+  statusEl.textContent = "停止しました";
+}
+
+sourceSel.onchange = async () => {
+  if (running) stopAll();
+  if (sourceSel.value === "camera") await listCameras();
+};
+
+/* ========= capture frame (cropped) ========= */
+async function captureJpegDataUrl(){
+  const VW = v.videoWidth, VH = v.videoHeight;
+  if (!VW || !VH) throw new Error("video not ready");
+
+  let sx=0, sy=0, sw=VW, sh=VH;
+  if (cropRect && cropRect.w>2 && cropRect.h>2) {
+    sx = Math.max(0, Math.min(VW-1, cropRect.x));
+    sy = Math.max(0, Math.min(VH-1, cropRect.y));
+    sw = Math.max(2, Math.min(VW - sx, cropRect.w));
+    sh = Math.max(2, Math.min(VH - sy, cropRect.h));
+  }
+
+  const targetW = 640;
+  const targetH = Math.max(2, Math.round(sh * (targetW / sw)));
+  cap.width = targetW;
+  cap.height = targetH;
+
+  cctx.drawImage(v, sx, sy, sw, sh, 0, 0, targetW, targetH);
+  return cap.toDataURL("image/jpeg", Number(q.value));
+}
+
+/* ========= extra prompt -> meta ========= */
+function getExtraPromptForMeta(){
+  if (!useExtra.checked) return "";
+  const p = (extraPrompt.value || "").trim();
+  if (!p) return "";
+  return p.slice(0, 1200); // 暴走防止（十分長い）
+}
+
+/* ========= polling ========= */
+async function tick(){
+  if (!running) return;
+
+  try{
+    statusEl.textContent = "送信中…";
+
+    const cur = await captureJpegDataUrl();
+    const prev = prevDataUrl || cur;
+    prevDataUrl = cur;
+
+    const extra = getExtraPromptForMeta();
+
+    const meta = {
+      ts: Date.now(),
+      mode: "general_video",
+      crop: !!(cropRect && cropRect.w>2 && cropRect.h>2),
+      source: sourceSel.value,
+      maxChars: Number(maxChars.value)|0,
+      extraPrompt: extra
+    };
+
+    const r = await fetch("/api/commentary", {
+      method:"POST",
+      headers:{ "content-type":"application/json" },
+      body: JSON.stringify({
+        sessionId,
+        prevImageBase64: prev,
+        imageBase64: cur,
+        meta
+      })
+    });
+
+    const j = await r.json();
+    if (!r.ok){
+      statusEl.textContent = `エラー: ${j?.error || r.status}`;
+      return;
+    }
+    if (j?.sessionId) sessionId = j.sessionId;
+
+    if (j?.commentary) {
+      const text = enforceMaxChars(j.commentary);
+      addMessage({ text, topic: j.topic, confidence: j.confidence });
+      await speakText(text);
+    }
+
+    statusEl.textContent = `OK（session: ${sessionId.slice(0,8)}…）`;
+
+    // 1回だけ反映
+    if (oneShot.checked && extra) {
+      useExtra.checked = false;
+      saveExtraState();
+    }
+  }catch(e){
+    console.error(e);
+    statusEl.textContent = "通信エラー: " + (e?.message ?? e);
+  }
+}
+
+function restartTimer(){
+  if (!running) return;
+  if (timer) clearInterval(timer);
+  const ms = Math.round(Number(ival.value) * 1000);
+  timer = setInterval(tick, ms);
+}
+
+/* ========= buttons ========= */
+btnStart.onclick = async () => {
+  if (running) return;
+
+  addMessage({ text: "開始します。", topic:"system", confidence:1 });
+  await speakText("開始します。");
+
+  await startCapture();
+
+  running = true;
+  btnStart.disabled = true;
+  btnStop.disabled = false;
+
+  sessionId = "";
+  prevDataUrl = "";
+  lastSpokenAt = 0;
+  lastTextNorm = "";
+
+  await tick();
+  restartTimer();
+};
+
+btnStop.onclick = stopAll;
+
+btnClear.onclick = () => {
+  if (!confirm("履歴を消しますか？")) return;
+  messages = [];
+  saveHistory();
+  renderChat();
+};
+
+/* ========= Extra prompt: send now ========= */
+btnSendNow.onclick = async () => {
+  if (!running) {
+    alert("先に「開始」して映像を取得してください。");
+    return;
+  }
+  await tick();
+};
+
+extraPrompt.addEventListener("keydown", async (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+    e.preventDefault();
+    if (!running) return;
+    await tick();
+  }
+});
+
+/* ========= init ========= */
+function loadCrop(){ try { cropRect = JSON.parse(localStorage.getItem(LS_CROP) || "null"); } catch { cropRect=null; } }
+function loadCropAndDraw(){ loadCrop(); drawOverlay(); }
+function saveCropOnly(){ try { localStorage.setItem(LS_CROP, JSON.stringify(cropRect)); } catch {} }
+
+loadHistory();
+loadCropAndDraw();
+setCropMode(false);
+listCameras().catch(()=>{});
+loadExtraState();
+syncLabels();
+
+v.addEventListener("loadedmetadata", () => {
+  resizeOverlay();
+  drawOverlay();
+});
+</script>
+</body>
+</html>
