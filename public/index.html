@@ -74,6 +74,146 @@
       margin: 0;
     }
     .flex-break { flex-basis: 100%; height: 0; }
+    /* ===== レイアウト分割 ===== */
+    
+    .app {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    .left-panel {
+      width: 360px;
+      flex-shrink: 0;
+    }
+
+    .right-panel {
+      flex: 1;
+      min-width: 0;
+    }
+
+    /* 左パネル内のrowは縦積み */
+    .left-panel .row {
+      margin-bottom: 14px;
+    }
+
+    /* モバイル対応（幅900px以下で縦並び） */
+    @media (max-width: 900px) {
+      .app {
+        flex-direction: column;
+      }
+
+      .left-panel {
+        width: 100%;
+      }
+    }
+
+    /* ===== スタジオレイアウト強化 ===== */
+
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* header高さを固定扱い */
+    .header {
+      flex: 0 0 auto;
+      padding: 12px 16px;
+      border-bottom: 1px solid #eee;
+      background: #fff;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    /* 全体エリア */
+    .app {
+      flex: 1;
+      display: flex;
+      gap: 24px;
+      padding: 16px;
+      box-sizing: border-box;
+      overflow: hidden; /* 左右分離のため */
+    }
+
+    /* ===== 左パネル固定実況卓 ===== */
+    .left-panel {
+      width: 380px;
+      flex-shrink: 0;
+
+      height: calc(100vh - 70px); /* header分を引く */
+      overflow-y: auto;
+
+      padding-right: 6px;
+    }
+
+    /* スクロールバーを少し綺麗に */
+    .left-panel::-webkit-scrollbar {
+      width: 8px;
+    }
+    .left-panel::-webkit-scrollbar-thumb {
+      background: #ddd;
+      border-radius: 6px;
+    }
+
+    /* ===== 右パネル映像 ===== */
+    .right-panel {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 16:9 固定ステージ */
+    .stage {
+      width: 100%;
+      max-width: 1100px;
+      aspect-ratio: 16 / 9;
+      position: relative;
+      background: #000;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .stage video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .stage canvas.overlay {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* ===== モバイル対応 ===== */
+    @media (max-width: 900px) {
+
+      .app {
+        flex-direction: column;
+        overflow: visible;
+      }
+
+      .left-panel {
+        width: 100%;
+        height: auto;
+        overflow: visible;
+      }
+
+      .right-panel {
+        width: 100%;
+      }
+
+      .stage {
+        aspect-ratio: 16 / 9;
+      }
+    }
+
   </style>
 </head>
 
@@ -82,101 +222,200 @@
     <img src="./AIcommentator.png" alt="AIコメンテーター アイコン">
     <h3>AIコメンテーター</h3>
   </div>
-  <div class="row">
-    <button id="start">開始</button>
-    <button id="stop" disabled>停止</button>
 
-    <span class="pill">キャプチャ元</span>
-    <select id="source" class="tight">
-      <option value="screen">画面共有（タブ/ウィンドウ/画面）</option>
-      <option value="camera">カメラ（PC/スマホ）</option>
-    </select>
+  <div class="app">
 
-    <span class="pill">カメラ</span>
-    <select id="cameraSelect" class="wide">
-      <option value="">（自動）</option>
-    </select>
+    <!-- ================= LEFT PANEL ================= -->
+    <div class="left-panel">
 
-    <label class="pill">
-      <input id="speak" type="checkbox" checked />
-      音声
-    </label>
-    <span class="flex-break"></span>
-    <span class="pill">送信間隔: <span id="ivalLabel">2.0</span>s</span>
-    <input id="ival" type="range" min="1.0" max="20.0" step="0.1" value="2.0" />
+      <!-- 操作系 -->
+      <div class="row">
+        <button id="start">開始</button>
+        <button id="stop" disabled>停止</button>
 
-    <span class="pill">最大文字数: <span id="maxCharsLabel">40</span></span>
-    <input id="maxChars" type="range" min="10" max="100" step="1" value="40" />
+        <span class="pill">キャプチャ元</span>
+        <select id="source" class="tight">
+          <option value="screen">画面共有</option>
+          <option value="camera">カメラ</option>
+        </select>
 
-    <span class="pill">画質: <span id="qLabel">0.55</span></span>
-    <input id="q" type="range" min="0.35" max="0.85" step="0.05" value="0.55" />
+        <span class="pill">カメラ</span>
+        <select id="cameraSelect" class="wide">
+          <option value="">（自動）</option>
+        </select>
 
-    <button id="cropMode">クロップ選択: OFF</button>
-    <button id="cropReset">クロップ解除</button>
+        <label class="pill">
+          <input id="speak" type="checkbox" checked />
+          音声
+        </label>
+      </div>
 
-    <button id="clear">履歴クリア</button>
-  </div>
+      <div class="row">
+        <span class="pill">送信間隔: <span id="ivalLabel">2.0</span>s</span>
+        <input id="ival" type="range" min="1.0" max="20.0" step="0.1" value="2.0" />
 
-  <div class="row">
-    <span class="pill">音声方式</span>
-    <select id="ttsMode" class="tight">
-      <option value="webspeech">Web Speech（ブラウザ内蔵）</option>
-      <option value="voicevox">VOICEVOX（高品質 / ローカル起動時）</option>
-    </select>
+        <span class="pill">最大文字数: <span id="maxCharsLabel">40</span></span>
+        <input id="maxChars" type="range" min="10" max="100" step="1" value="40" />
 
-    <span class="pill">Web Speech 音声</span>
-    <select id="voiceSelect" class="wide"></select>
+        <span class="pill">画質: <span id="qLabel">0.55</span></span>
+        <input id="q" type="range" min="0.35" max="0.85" step="0.05" value="0.55" />
+      </div>
 
-    <span class="pill">話速: <span id="rateLabel">1.02</span></span>
-    <input id="rate" type="range" min="0.85" max="1.25" step="0.01" value="1.02" />
+      <div class="row">
+        <button id="cropMode">クロップ選択</button>
+        <button id="cropReset">クロップ解除</button>
+        <button id="clear">履歴クリア</button>
+      </div>
 
-    <span class="pill">高さ: <span id="pitchLabel">1.00</span></span>
-    <input id="pitch" type="range" min="0.80" max="1.20" step="0.01" value="1.00" />
+      <!-- 音声設定 -->
+      <div class="row">
+        <span class="pill">音声方式</span>
+        <select id="ttsMode" class="tight">
+          <option value="webspeech">Web Speech</option>
+          <option value="voicevox">VOICEVOX</option>
+        </select>
 
-    <span class="pill">VOICEVOX speaker</span>
-    <select id="vvSpeaker" class="wide">
-      <option value="0">（未読込）</option>
-    </select>
+        <span class="pill">Web Speech 音声</span>
+        <select id="voiceSelect" class="wide"></select>
+      </div>
 
-    <button id="loadSpeakers">VOICEVOX 話者読込</button>
-  </div>
+      <div class="row">
+        <span class="pill">話速: <span id="rateLabel">1.02</span></span>
+        <input id="rate" type="range" min="0.85" max="1.25" step="0.01" value="1.02" />
 
-  <div class="stage">
-    <video id="v" playsinline muted></video>
-    <canvas id="overlay" class="overlay"></canvas>
-  </div>
+        <span class="pill">高さ: <span id="pitchLabel">1.00</span></span>
+        <input id="pitch" type="range" min="0.80" max="1.20" step="0.01" value="1.00" />
+      </div>
 
-  <div class="promptbox">
-    <div class="row" style="margin:0 0 8px 0;">
-      <span class="pill">Geminiへの追加指示（任意）</span>
-      <label class="pill">
-        <input id="useExtra" type="checkbox" checked />
-        追加指示を有効にする
-      </label>
-      <label class="pill">
-        <input id="oneShot" type="checkbox" />
-        1回だけ反映（送信後に自動OFF）
-      </label>
-      <button id="sendNow">今すぐ1回送信</button>
-      <span class="small">ショートカット: <span class="kbd">Ctrl</span> + <span class="kbd">Enter</span></span>
+      <div class="row">
+        <span class="pill">VOICEVOX speaker</span>
+        <select id="vvSpeaker" class="wide">
+          <option value="0">（未読込）</option>
+        </select>
+        <button id="loadSpeakers">話者読込</button>
+      </div>
+
+      <!-- 解析モード -->
+      <hr style="margin:10px 0; opacity:.3;">
+
+      <div class="row" style="align-items:center;">
+        <label style="font-weight:bold; display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="enableAdvantage">
+          優勢バー表示
+        </label>
+
+        <button id="analyzeStart" disabled>解析開始</button>
+        <button id="analyzeStop" disabled>解析終了</button>
+
+        <span class="pill" id="analyzeState">解析: 停止中</span>
+      </div>
+
+      <div id="analyzeResult" class="small" style="display:none;"></div>
+
+      <div id="fighterForm" style="margin-top:10px; display:none;">
+        <div style="margin-bottom:6px;">
+          <strong style="color:#ff4d4d;">RED：特徴</strong><br>
+          <input id="redFeatures" type="text" style="width:100%;">
+        </div>
+        <div>
+          <strong style="color:#4da6ff;">BLUE：特徴</strong><br>
+          <input id="blueFeatures" type="text" style="width:100%;">
+        </div>
+      </div>
+
+      <!-- 追加プロンプト -->
+      <div class="promptbox">
+        <div class="row" style="margin:0 0 8px 0;">
+          <span class="pill">追加指示</span>
+          <label class="pill">
+            <input id="useExtra" type="checkbox" checked />
+            有効
+          </label>
+          <label class="pill">
+            <input id="oneShot" type="checkbox" />
+            1回のみ
+          </label>
+          <button id="sendNow">即送信</button>
+        </div>
+        <textarea id="extraPrompt"></textarea>
+      </div>
+
+      <!-- チャット -->
+      <div class="chat" id="chat"></div>
+      <div id="status">未開始</div>
+
+      <div class="hint">
+        画面共有は動画タブを選ぶと安定します。
+      </div>
+
     </div>
-    <textarea id="extraPrompt" placeholder="例：画面下のテロップ（字幕）を優先して読み取り、内容を短く要約して。/ 画面下のコメント欄に注目して読み上げて。"></textarea>
-    <div class="small" style="margin-top:6px;">
-      ※この入力は <b>meta.extraPrompt</b> としてサーバへ送られ、Geminiの指示に含まれます。  
-      「何を見るか（画面下、右側、テロップ、数字）」などの指定が効きやすいです。
+
+
+    <!-- ================= RIGHT PANEL ================= -->
+    <div class="right-panel">
+
+      <div class="stage">
+
+        <div id="advantageOverlay" style="
+          position:absolute;
+          top:10px;
+          left:50%;
+          transform:translateX(-50%);
+          width:80%;
+          height:26px;
+          background:#222;
+          border-radius:20px;
+          overflow:hidden;
+          display:none;
+          box-shadow:0 2px 8px rgba(0,0,0,.6);
+        ">
+
+          <div id="redBar" style="
+            height:100%;
+            width:50%;
+            background:linear-gradient(to right,#ff4d4d,#ff8080);
+          "></div>
+
+          <div id="blueBar" style="
+            position:absolute;
+            right:0;
+            top:0;
+            height:100%;
+            width:50%;
+            background:linear-gradient(to left,#4da6ff,#80c1ff);
+          "></div>
+
+          <div id="redPct" style="
+            position:absolute;
+            left:10px;
+            top:3px;
+            font-size:12px;
+            font-weight:bold;
+          ">50点</div>
+
+          <div id="bluePct" style="
+            position:absolute;
+            right:10px;
+            top:3px;
+            font-size:12px;
+            font-weight:bold;
+          ">50点</div>
+
+        </div>
+
+        <video id="v" playsinline muted></video>
+        <canvas id="overlay" class="overlay"></canvas>
+
+      </div>
+
     </div>
+
   </div>
 
   <canvas id="cap" style="display:none;"></canvas>
 
-  <div class="chat" id="chat"></div>
-  <div id="status">未開始</div>
+</body>
 
-  <div class="hint">
-    画面共有は「動画が再生されているタブ」を選ぶと安定。<br>
-    スマホでカメラ使用は HTTPS が必要な場合があります。
-  </div>
-</div>
 
 <script>
 /* ========= DOM ========= */
@@ -605,6 +844,9 @@ function stopAll(){
   btnStart.disabled = false;
   btnStop.disabled = true;
   statusEl.textContent = "停止しました";
+
+  analyzing = false;
+  setAnalyzeUI();
 }
 
 sourceSel.onchange = async () => {
@@ -657,11 +899,14 @@ async function tick(){
 
     const meta = {
       ts: Date.now(),
-      mode: "general_video",
+      mode: enableAdv.checked ? "boxing_advantage" : "general_video",
       crop: !!(cropRect && cropRect.w>2 && cropRect.h>2),
       source: sourceSel.value,
       maxChars: Number(maxChars.value)|0,
-      extraPrompt: extra
+      extraPrompt: extra,
+      enableAdvantage: enableAdv.checked,
+      redFeatures: document.getElementById("redFeatures").value || "",
+      blueFeatures: document.getElementById("blueFeatures").value || ""
     };
 
     const r = await fetch("/api/commentary", {
@@ -686,6 +931,10 @@ async function tick(){
       const text = enforceMaxChars(j.commentary);
       addMessage({ text, topic: j.topic, confidence: j.confidence });
       await speakText(text);
+    }
+
+    if (analyzing && enableAdv.checked && j?.advantage && typeof j.advantage.red === "number") {
+      redTarget = Math.max(0, Math.min(1, j.advantage.red));
     }
 
     statusEl.textContent = `OK（session: ${sessionId.slice(0,8)}…）`;
@@ -721,6 +970,9 @@ btnStart.onclick = async () => {
   btnStart.disabled = true;
   btnStop.disabled = false;
 
+  redAdv = 0.5;
+  redTarget = 0.5;
+
   sessionId = "";
   prevDataUrl = "";
   lastSpokenAt = 0;
@@ -728,6 +980,7 @@ btnStart.onclick = async () => {
 
   await tick();
   restartTimer();
+  setAnalyzeUI();
 };
 
 btnStop.onclick = stopAll;
@@ -755,6 +1008,113 @@ extraPrompt.addEventListener("keydown", async (e) => {
     await tick();
   }
 });
+
+const enableAdv = document.getElementById("enableAdvantage");
+const fighterForm = document.getElementById("fighterForm");
+// const overlay = document.getElementById("advantageOverlay");
+const advantageOverlay = document.getElementById("advantageOverlay");
+
+const btnAnalyzeStart = document.getElementById("analyzeStart");
+const btnAnalyzeStop  = document.getElementById("analyzeStop");
+const analyzeStateEl  = document.getElementById("analyzeState");
+const analyzeResultEl = document.getElementById("analyzeResult");
+
+let analyzing = false;
+
+// 累計用（時間積分：面積）
+let accRed = 0;   // redの優勢面積
+let accBlue = 0;  // blueの優勢面積
+let lastAccT = 0; // 前回時刻(ms)
+
+function setAnalyzeUI(){
+  btnAnalyzeStart.disabled = !(enableAdv.checked && running && !analyzing);
+  btnAnalyzeStop.disabled  = !(enableAdv.checked && running && analyzing);
+  analyzeStateEl.textContent = `解析: ${analyzing ? "実行中" : "停止中"}`;
+}
+
+btnAnalyzeStart.onclick = () => {
+  if (!running) { alert("先に「開始」してください"); return; }
+  if (!enableAdv.checked) { alert("先に「優勢バーを表示」をONにしてください"); return; }
+
+  analyzing = true;
+
+  accRed = 0;
+  accBlue = 0;
+  lastAccT = Date.now();
+
+  redAdv = 0.5;
+  redTarget = 0.5;
+
+  analyzeResultEl.style.display = "none";
+  setAnalyzeUI();
+};
+
+btnAnalyzeStop.onclick = () => {
+  analyzing = false;
+
+  const now = Date.now();
+  const dt = Math.max(0, (now - lastAccT) / 1000);
+  accRed  += redAdv * dt;
+  accBlue += (1 - redAdv) * dt;
+  lastAccT = now;
+
+  const total = accRed + accBlue || 1;
+  const redPct = (accRed / total) * 100;
+  const bluePct = 100 - redPct;
+
+  analyzeResultEl.style.display = "block";
+  analyzeResultEl.innerHTML = `
+    <b>解析結果</b><br>
+    RED優勢: ${redPct.toFixed(1)} 点 / BLUE優勢: ${bluePct.toFixed(1)} 点
+  `;
+
+  setAnalyzeUI();
+};
+
+enableAdv.addEventListener("change", () => {
+  fighterForm.style.display = enableAdv.checked ? "block" : "none";
+  advantageOverlay.style.display = enableAdv.checked ? "block" : "none";
+
+  // 解析はOFFに戻す
+  analyzing = false;
+  analyzeResultEl.style.display = "none";
+  setAnalyzeUI();
+});
+
+let redAdv = 0.5;   // 現在値
+let redTarget = 0.5; // Geminiからの値
+const smoothing = 0.03; // 小さいほどヌルヌル
+
+function updateAdvantageVisual() {
+  // EMA（ぬるっと）
+  redAdv = redAdv * (1 - smoothing) + redTarget * smoothing;
+
+  // 解析中のみ「累計」
+  const now = Date.now();
+  if (analyzing) {
+    const dt = Math.max(0, (now - lastAccT) / 1000);
+    // 今この瞬間の優勢度を面積として積む
+    accRed  += redAdv * dt;
+    accBlue += (1 - redAdv) * dt;
+    lastAccT = now;
+  } else {
+    lastAccT = now;
+  }
+
+  // ---- 表示用スコア（1点単位 + 少しだけ揺らす）
+  const jitter = (Math.random() - 0.5) * 0.8; // -0.4..+0.4 点ぶんの微小ノイズ
+  const redPercent = Math.max(0, Math.min(100, Math.round(redAdv * 100 + jitter)));
+  const bluePercent = 100 - redPercent;
+
+  document.getElementById("redBar").style.width = redPercent + "%";
+  document.getElementById("blueBar").style.width = bluePercent + "%";
+  document.getElementById("redPct").textContent = redPercent + "点";
+  document.getElementById("bluePct").textContent = bluePercent + "点";
+
+  requestAnimationFrame(updateAdvantageVisual);
+}
+
+updateAdvantageVisual();
 
 /* ========= init ========= */
 function loadCrop(){ try { cropRect = JSON.parse(localStorage.getItem(LS_CROP) || "null"); } catch { cropRect=null; } }

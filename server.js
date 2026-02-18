@@ -45,6 +45,9 @@ function buildGeneralPrompt({ meta, lastTexts }) {
 
   // クライアント指定の最大文字数（1〜100、デフォルト40）
   const maxChars = Math.max(10, Math.min(100, Number(meta?.maxChars ?? 40)));
+  const enableAdv = !!meta?.enableAdvantage;
+  const redFeatures = String(meta?.redFeatures || "").trim();
+  const blueFeatures = String(meta?.blueFeatures || "").trim();
 
   return `
 あなたはテレビ中継の実況・解説者です。
@@ -58,7 +61,12 @@ function buildGeneralPrompt({ meta, lastTexts }) {
 {
   "commentary": "1文のみ。最大${maxChars}文字以内。落ち着いた口調。画面に文字が表示されたら、必ず読み上げる。変化がない場合は空文字。",
   "topic": "内容カテゴリ（例: スポーツ/ニュース/ゲーム/会議/自然/その他）",
-  "confidence": 0.0-1.0
+  "confidence": 0.0-1.0${enableAdv ? `,
+  "advantage": {
+    "red": 0.0-1.0,
+    "blue": 0.0-1.0,
+    "reason": "短い理由"
+  }` : ""}
 }
 
 ルール：
@@ -68,6 +76,16 @@ function buildGeneralPrompt({ meta, lastTexts }) {
 - 不確実なら confidence を下げる
 - 同じ言い回しを連発しない
 - 画面に有意な変化が見られない場合は commentary を空文字 "" にする
+
+${enableAdv ? `
+【優勢バー（RED/BLUE固定）】
+- 2人を固定ラベルで扱う：RED / BLUE
+- RED特徴: ${redFeatures || "（未指定）"}
+- BLUE特徴: ${blueFeatures || "（未指定）"}
+- REDとBLUEを絶対に入れ替えない（左右で固定しない）
+- 判別不能なら advantage を出さない（commentaryだけでOK）
+- advantage を出す場合、red+blue は概ね 1.0
+` : ""}
 
 直近のコメント（重複回避の参考）：
 ${prev ? prev : "（なし）"}
@@ -163,12 +181,23 @@ app.post("/api/commentary", async (req, res) => {
     const topic = String(parsed.topic || "その他").slice(0, 20);
     const confidence = clamp(parsed.confidence, 0, 1);
 
+    let advantage = undefined;
+    if (meta?.enableAdvantage && parsed?.advantage && typeof parsed.advantage.red === "number") {
+      const red = clamp(parsed.advantage.red, 0, 1);
+      const blue = (typeof parsed.advantage.blue === "number") ? clamp(parsed.advantage.blue, 0, 1) : (1 - red);
+      advantage = {
+        red,
+        blue,
+        reason: String(parsed.advantage.reason || "").slice(0, 80),
+      };
+    }
+
     // 重複抑制（サーバ側）
     const norm = normalizeForDedup(commentary);
     const lastNorm = normalizeForDedup(st.lastTexts?.[st.lastTexts.length - 1] || "");
     if (norm && lastNorm && (norm === lastNorm || norm.includes(lastNorm) || lastNorm.includes(norm))) {
       // 似すぎなら控えめな一言に
-      commentary = "状況は大きくは動いていません。";
+      commentary = "";
     }
 
     if (commentary) {
@@ -176,7 +205,7 @@ app.post("/api/commentary", async (req, res) => {
       if (st.lastTexts.length > 12) st.lastTexts.splice(0, st.lastTexts.length - 12);
     }
 
-    res.json({ sessionId: sid, commentary, topic, confidence });
+    res.json({ sessionId: sid, commentary, topic, confidence, advantage });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: "server error", detail: String(e?.message ?? e) });
