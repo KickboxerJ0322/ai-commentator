@@ -97,17 +97,6 @@
       margin-bottom: 14px;
     }
 
-    /* モバイル対応（幅900px以下で縦並び） */
-    @media (max-width: 900px) {
-      .app {
-        flex-direction: column;
-      }
-
-      .left-panel {
-        width: 100%;
-      }
-    }
-
     /* ===== スタジオレイアウト強化 ===== */
 
     html, body {
@@ -191,11 +180,17 @@
       inset: 0;
     }
 
-    /* ===== モバイル対応 ===== */
+    /* ===== スマホ：ビデオ下固定 ===== */
     @media (max-width: 900px) {
 
+      body {
+        display: block;
+      }
+
       .app {
-        flex-direction: column;
+        display: block;
+        padding: 16px;
+        padding-bottom: 56vw; /* 16:9の高さ分の余白 */
         overflow: visible;
       }
 
@@ -206,11 +201,18 @@
       }
 
       .right-panel {
+        position: fixed;
+        bottom: 0;
+        left: 0;
         width: 100%;
+        background: #000;
+        z-index: 100;
       }
 
       .stage {
+        width: 100%;
         aspect-ratio: 16 / 9;
+        border-radius: 0;
       }
     }
 
